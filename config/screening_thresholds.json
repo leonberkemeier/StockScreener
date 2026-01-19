@@ -1,0 +1,21 @@
+{
+  "dividend": {
+    "min_current_yield": 0.02,
+    "min_yield_expansion_pp": 0.003,
+    "min_price_discount_vs_90d_avg": 0.01,
+    "max_pe_ratio": 25,
+    "max_payout_ratio": 0.95,
+    "min_market_cap_eur": 200000000
+  },
+  "volatility": {
+    "min_beta": 1.3,
+    "max_pe_ratio": 25,
+    "min_drop_from_high": 0.08,
+    "min_market_cap_eur": 300000000,
+    "min_volatility": 0.20
+  },
+  "alerts": {
+    "duplicate_alert_days": 7,
+    "max_alerts_per_day": 20
+  }
+}

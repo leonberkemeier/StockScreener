@@ -1,0 +1,11 @@
+[
+  "ASML.AS", "PHIA.AS", "ADYEN.AS", "HEIA.AS", "UNA.AS", "INGA.AS", "ABN.AS",
+  "NESN.SW", "NOVN.SW", "ROG.SW", "UBSG.SW", "ZURN.SW", "LONN.SW", "ABBN.SW",
+  "MC.PA", "OR.PA", "SAN.PA", "TTE.PA", "BNP.PA", "AIR.PA", "SU.PA",
+  "SHEL.L", "AZN.L", "HSBA.L", "DGE.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L",
+  "NOVO-B.CO", "DSV.CO", "ORSTED.CO", "CARLB.CO", "VWS.CO",
+  "EQNR.OL", "DNB.OL", "MOWI.OL", "TEL.OL",
+  "VOLV-B.ST", "ABB.ST", "SEB-A.ST", "SWED-A.ST", "HM-B.ST",
+  "ISP.MI", "ENI.MI", "ENEL.MI", "STLAM.MI", "UCG.MI",
+  "SAN.MC", "ITX.MC", "IBE.MC", "TEF.MC", "BBVA.MC"
+]

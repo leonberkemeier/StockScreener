@@ -1,0 +1,15 @@
+[
+  "ASML.AS", "PHIA.AS", "ADYEN.AS", "HEIA.AS", "UNA.AS", "INGA.AS", "ABN.AS", "AKZA.AS", "KPN.AS", "NN.AS",
+  "NESN.SW", "NOVN.SW", "ROG.SW", "UBSG.SW", "ZURN.SW", "LONN.SW", "ABBN.SW", "GIVN.SW", "SREN.SW", "CSGN.SW",
+  "MC.PA", "OR.PA", "SAN.PA", "TTE.PA", "BNP.PA", "AIR.PA", "SU.PA", "RMS.PA", "DSY.PA", "DG.PA", "CS.PA", "EL.PA", "SGO.PA", "VIE.PA", "KER.PA",
+  "SHEL.L", "AZN.L", "HSBA.L", "DGE.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "REL.L", "LSEG.L", "PRU.L", "NG.L", "BARC.L", "LLOY.L", "VOD.L", "BT-A.L", "IAG.L", "BA.L", "LAND.L", "SGRO.L",
+  "NOVO-B.CO", "DSV.CO", "ORSTED.CO", "CARLB.CO", "VWS.CO", "DEMANT.CO", "TRYG.CO", "PNDORA.CO",
+  "EQNR.OL", "DNB.OL", "MOWI.OL", "TEL.OL", "ORK.OL", "YAR.OL",
+  "VOLV-B.ST", "ABB.ST", "SEB-A.ST", "SWED-A.ST", "HM-B.ST", "ERIC-B.ST", "ATCO-A.ST", "SAND.ST", "ALFA.ST",
+  "ISP.MI", "ENI.MI", "ENEL.MI", "STLAM.MI", "UCG.MI", "G.MI", "TEN.MI", "RACE.MI", "CPR.MI", "ATL.MI",
+  "SAN.MC", "ITX.MC", "IBE.MC", "TEF.MC", "BBVA.MC", "REP.MC", "FER.MC", "AMS.MC", "CABK.MC", "ELE.MC",
+  "EDP.LS", "GALP.LS", "JMT.LS", "BCP.LS",
+  "GLPG.AS", "RAND.AS", "AGN.AS", "ASM.AS", "BESI.AS",
+  "SIKA.SW", "SGS.SW", "GEBN.SW", "ALC.SW", "SCMN.SW", "SLHN.SW",
+  "WPP.L", "CRDA.L", "BATS.L", "GLEN.L", "AAL.L", "CRH.L", "AHT.L", "MNG.L", "FERG.L"
+]

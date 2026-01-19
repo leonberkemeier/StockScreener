@@ -1,0 +1,19 @@
+[
+  {
+    "ticker": "ITC.NS",
+    "name": "ITC Limited",
+    "sector": "Consumer Defensive",
+    "country": "India",
+    "price_eur": 3.62,
+    "price_90d_avg": 4.33796875,
+    "price_discount": 0.1655080502827504,
+    "dividend_yield": 0.04769999999999999,
+    "dividend_per_share": 0.17267399999999997,
+    "historical_implied_yield": 0.039805266001512796,
+    "yield_expansion_pp": 0.007894733998487197,
+    "pe_ratio": 20.447205,
+    "payout_ratio": 0.8908,
+    "market_cap_eur": 45369869467.647995,
+    "reason": "Yield expanded by 0.8 percentage points (4.0% \u2192 4.8%). Price 16.6% below 90-day average (\u20ac4.34 \u2192 \u20ac3.62). Dividend: \u20ac0.17/share. P/E: 20.4 (undervalued)."
+  }
+]
