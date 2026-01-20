@@ -6,9 +6,32 @@ Only sends alerts for opportunities that weren't detected yesterday.
 
 import sys
 import json
+import os
+from pathlib import Path
 from datetime import datetime
 from common.email_alerts import EmailAlertSystem
-from screener_enhanced import DividendScreener, VolatilityScreener
+from common.database import StockDatabase
+from screener_enhanced import (
+    screen_dividend_opportunities,
+    screen_volatility_opportunities,
+    load_config
+)
+
+
+# Load .env file if it exists
+def load_env_file():
+    """Load environment variables from .env file."""
+    env_file = Path(__file__).parent / '.env'
+    if env_file.exists():
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+
+
+load_env_file()
 
 
 def load_opportunities_from_screener():
@@ -20,19 +43,28 @@ def load_opportunities_from_screener():
     """
     print("=== Running Stock Screener ===\n")
     
-    # Run dividend screening
-    print("Running dividend screening...")
-    dividend_screener = DividendScreener()
-    dividend_opps = dividend_screener.screen()
-    print(f"✅ Found {len(dividend_opps)} dividend opportunities\n")
+    # Load config
+    config = load_config()
     
-    # Run volatility screening
-    print("Running volatility screening...")
-    volatility_screener = VolatilityScreener()
-    volatility_opps = volatility_screener.screen()
-    print(f"✅ Found {len(volatility_opps)} volatility opportunities\n")
+    # Connect to database
+    db = StockDatabase()
+    db.connect()
     
-    return dividend_opps, volatility_opps
+    try:
+        # Run dividend screening
+        print("Running dividend screening...")
+        dividend_opps = screen_dividend_opportunities(db, config)
+        print(f"✅ Found {len(dividend_opps)} dividend opportunities\n")
+        
+        # Run volatility screening
+        print("Running volatility screening...")
+        volatility_opps = screen_volatility_opportunities(db, config)
+        print(f"✅ Found {len(volatility_opps)} volatility opportunities\n")
+        
+        return dividend_opps, volatility_opps
+    
+    finally:
+        db.close()
 
 
 def main():

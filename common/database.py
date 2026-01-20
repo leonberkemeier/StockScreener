@@ -8,6 +8,25 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
+from contextlib import contextmanager
+
+
+@contextmanager
+def get_db_connection(db_path: str = "stock_screener.db"):
+    """Context manager for database connections.
+    
+    Usage:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(...)
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class StockDatabase:

@@ -22,6 +22,7 @@ class EmailAlertSystem:
         self.sender_email = os.getenv('SENDER_EMAIL')
         self.sender_password = os.getenv('SENDER_PASSWORD')
         self.recipient_email = os.getenv('RECIPIENT_EMAIL')
+        self.cc_email = os.getenv('CC_EMAIL', '')  # Optional CC recipient
         
         if not all([self.sender_email, self.sender_password, self.recipient_email]):
             raise ValueError(
@@ -44,7 +45,7 @@ class EmailAlertSystem:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT ticker, strategy_type, alert_date, details
+                SELECT ticker, strategy, alert_date, metrics
                 FROM alerts
                 WHERE alert_date >= ?
                 ORDER BY alert_date DESC
@@ -72,9 +73,9 @@ class EmailAlertSystem:
         """
         recent_alerts = self.get_recent_alerts(lookback_days)
         
-        # Create set of (ticker, strategy_type) tuples for recent alerts
+        # Create set of (ticker, strategy) tuples for recent alerts
         recent_alert_keys = {
-            (alert['ticker'], alert['strategy_type']) 
+            (alert['ticker'], alert['strategy']) 
             for alert in recent_alerts
         }
         
@@ -105,9 +106,16 @@ class EmailAlertSystem:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO alerts (ticker, strategy_type, alert_date, details)
-                VALUES (?, ?, DATE('now'), ?)
-            """, (ticker, strategy_type, json.dumps(details)))
+                INSERT INTO alerts 
+                (ticker, strategy, alert_date, price_eur, reason, metrics)
+                VALUES (?, ?, DATE('now'), ?, ?, ?)
+            """, (
+                ticker, 
+                strategy_type,
+                details.get('price_eur', 0),
+                f"{strategy_type} opportunity detected",
+                json.dumps(details)
+            ))
             conn.commit()
     
     def format_dividend_opportunity(self, opp: Dict[str, Any]) -> str:
@@ -115,22 +123,22 @@ class EmailAlertSystem:
         return f"""
         <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
             <h3 style="margin-top: 0; color: #2c5aa0;">
-                {opp['ticker']} - {opp.get('company_name', 'N/A')}
+                {opp['ticker']} - {opp.get('name', 'N/A')}
             </h3>
             <p><strong>Sector:</strong> {opp.get('sector', 'N/A')} | 
                <strong>Country:</strong> {opp.get('country', 'N/A')}</p>
             
             <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
-                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['current_price']:.2f}</p>
-                <p style="margin: 5px 0;"><strong>90-Day Avg Price:</strong> €{opp['avg_price_90d']:.2f}</p>
+                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['price_eur']:.2f}</p>
+                <p style="margin: 5px 0;"><strong>90-Day Avg Price:</strong> €{opp['price_90d_avg']:.2f}</p>
                 <p style="margin: 5px 0; color: #c0392b;">
-                    <strong>Price Discount:</strong> {opp['price_discount_pct']*100:.1f}%
+                    <strong>Price Discount:</strong> {opp['price_discount']*100:.1f}%
                 </p>
             </div>
             
             <div style="background: #e8f5e9; padding: 10px; margin: 10px 0;">
-                <p style="margin: 5px 0;"><strong>Current Yield:</strong> {opp['current_yield']*100:.2f}%</p>
-                <p style="margin: 5px 0;"><strong>Historical Yield:</strong> {opp['historical_yield']*100:.2f}%</p>
+                <p style="margin: 5px 0;"><strong>Current Yield:</strong> {opp['dividend_yield']*100:.2f}%</p>
+                <p style="margin: 5px 0;"><strong>Historical Yield:</strong> {opp['historical_implied_yield']*100:.2f}%</p>
                 <p style="margin: 5px 0; color: #27ae60;">
                     <strong>Yield Expansion:</strong> +{opp['yield_expansion_pp']*100:.2f} pp
                 </p>
@@ -148,16 +156,16 @@ class EmailAlertSystem:
         return f"""
         <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
             <h3 style="margin-top: 0; color: #8e44ad;">
-                {opp['ticker']} - {opp.get('company_name', 'N/A')}
+                {opp['ticker']} - {opp.get('name', 'N/A')}
             </h3>
             <p><strong>Sector:</strong> {opp.get('sector', 'N/A')} | 
                <strong>Country:</strong> {opp.get('country', 'N/A')}</p>
             
             <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
-                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['current_price']:.2f}</p>
+                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['price_eur']:.2f}</p>
                 <p style="margin: 5px 0;"><strong>90-Day High:</strong> €{opp['high_90d']:.2f}</p>
                 <p style="margin: 5px 0; color: #c0392b;">
-                    <strong>Drop from High:</strong> {opp['drop_from_high_pct']*100:.1f}%
+                    <strong>Drop from High:</strong> {abs(opp['drop_from_high'])*100:.1f}%
                 </p>
             </div>
             
@@ -251,6 +259,10 @@ class EmailAlertSystem:
         msg['From'] = self.sender_email
         msg['To'] = self.recipient_email
         
+        # Add CC if configured
+        if self.cc_email:
+            msg['Cc'] = self.cc_email
+        
         # Create HTML body
         html_body = self.create_email_html(dividend_opportunities, volatility_opportunities)
         msg.attach(MIMEText(html_body, 'html'))
@@ -263,6 +275,8 @@ class EmailAlertSystem:
                 server.send_message(msg)
             
             print(f"✅ Email sent successfully to {self.recipient_email}")
+            if self.cc_email:
+                print(f"   CC: {self.cc_email}")
             print(f"   - {len(dividend_opportunities)} dividend opportunities")
             print(f"   - {len(volatility_opportunities)} volatility opportunities")
             
