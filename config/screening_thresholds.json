@@ -17,5 +17,25 @@
   "alerts": {
     "duplicate_alert_days": 7,
     "max_alerts_per_day": 20
+  },
+  "technical_filters": {
+    "use_rsi": true,
+    "rsi_threshold": 40,
+    "use_moving_averages": true,
+    "require_above_50ma": false
+  },
+  "52_week_low": {
+    "max_distance_from_low_pct": 0.05,
+    "max_pe_ratio": 15,
+    "min_dividend_yield": 0.02,
+    "min_market_cap_eur": 500000000,
+    "require_profitable": true
+  },
+  "golden_cross": {
+    "enabled": true,
+    "lookback_days": 5,
+    "max_pe_ratio": 25,
+    "min_market_cap_eur": 1000000000,
+    "min_dividend_yield": 0.015
   }
 }

@@ -103,6 +103,23 @@ class EmailAlertSystem:
         """
         import json
         
+        # Convert numpy/boolean types to JSON-serializable types
+        def make_json_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: make_json_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [make_json_serializable(item) for item in obj]
+            elif isinstance(obj, bool):
+                return bool(obj)
+            elif isinstance(obj, (int, float)):
+                return float(obj) if isinstance(obj, float) else int(obj)
+            elif obj is None:
+                return None
+            else:
+                return str(obj)
+        
+        serializable_details = make_json_serializable(details)
+        
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -114,7 +131,7 @@ class EmailAlertSystem:
                 strategy_type,
                 details.get('price_eur', 0),
                 f"{strategy_type} opportunity detected",
-                json.dumps(details)
+                json.dumps(serializable_details)
             ))
             conn.commit()
     
@@ -179,10 +196,73 @@ class EmailAlertSystem:
         </div>
         """
     
+    def format_52_week_low_opportunity(self, opp: Dict[str, Any]) -> str:
+        """Format a 52-week low opportunity as HTML."""
+        return f"""
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #c0392b;">
+                {opp['ticker']} - {opp.get('name', 'N/A')}
+            </h3>
+            <p><strong>Sector:</strong> {opp.get('sector', 'N/A')} | 
+               <strong>Country:</strong> {opp.get('country', 'N/A')}</p>
+            
+            <div style="background: #ffebee; padding: 10px; margin: 10px 0;">
+                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['price_eur']:.2f}</p>
+                <p style="margin: 5px 0;"><strong>52-Week Low:</strong> €{opp['week_52_low']:.2f}</p>
+                <p style="margin: 5px 0;"><strong>52-Week High:</strong> €{opp['week_52_high']:.2f}</p>
+                <p style="margin: 5px 0; color: #c0392b;">
+                    <strong>Distance from Low:</strong> {opp['distance_from_low_pct']*100:.1f}%
+                </p>
+            </div>
+            
+            <div style="background: #e8f5e9; padding: 10px; margin: 10px 0;">
+                <p style="margin: 5px 0;"><strong>Dividend Yield:</strong> {opp['dividend_yield']*100:.2f}%</p>
+                <p style="margin: 5px 0;"><strong>P/E Ratio:</strong> {opp.get('pe_ratio', 'N/A')}</p>
+                {f'<p style="margin: 5px 0;"><strong>RSI:</strong> {opp["rsi"]:.1f} (Oversold)</p>' if opp.get('is_oversold') else ''}
+            </div>
+            
+            <p><strong>Market Cap:</strong> €{opp.get('market_cap_eur', 0)/1e9:.1f}B</p>
+        </div>
+        """
+    
+    def format_golden_cross_opportunity(self, opp: Dict[str, Any]) -> str:
+        """Format a golden cross opportunity as HTML."""
+        return f"""
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #f39c12;">
+                {opp['ticker']} - {opp.get('name', 'N/A')}
+            </h3>
+            <p><strong>Sector:</strong> {opp.get('sector', 'N/A')} | 
+               <strong>Country:</strong> {opp.get('country', 'N/A')}</p>
+            
+            <div style="background: #fff9e6; padding: 10px; margin: 10px 0;">
+                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{opp['price_eur']:.2f}</p>
+                <p style="margin: 5px 0; color: #27ae60;">
+                    <strong>50-Day MA:</strong> €{opp['ma_50']:.2f} ✓
+                </p>
+                <p style="margin: 5px 0;">
+                    <strong>200-Day MA:</strong> €{opp['ma_200']:.2f}
+                </p>
+                <p style="margin: 5px 0; color: #f39c12;">
+                    <strong>Golden Cross Detected!</strong> Bullish momentum signal.
+                </p>
+            </div>
+            
+            <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
+                <p style="margin: 5px 0;"><strong>P/E Ratio:</strong> {opp.get('pe_ratio', 'N/A')}</p>
+                {f'<p style="margin: 5px 0;"><strong>Dividend Yield:</strong> {opp["dividend_yield"]*100:.2f}%</p>' if opp.get('dividend_yield', 0) > 0 else ''}
+            </div>
+            
+            <p><strong>Market Cap:</strong> €{opp.get('market_cap_eur', 0)/1e9:.1f}B</p>
+        </div>
+        """
+    
     def create_email_html(
         self, 
         dividend_opps: List[Dict[str, Any]], 
-        volatility_opps: List[Dict[str, Any]]
+        volatility_opps: List[Dict[str, Any]],
+        week_52_low_opps: List[Dict[str, Any]] = None,
+        golden_cross_opps: List[Dict[str, Any]] = None
     ) -> str:
         """
         Create HTML email body with opportunities.
@@ -190,10 +270,17 @@ class EmailAlertSystem:
         Args:
             dividend_opps: List of dividend opportunities
             volatility_opps: List of volatility opportunities
+            week_52_low_opps: List of 52-week low opportunities
+            golden_cross_opps: List of golden cross opportunities
             
         Returns:
             HTML string
         """
+        week_52_low_opps = week_52_low_opps or []
+        golden_cross_opps = golden_cross_opps or []
+        
+        total_opps = len(dividend_opps) + len(volatility_opps) + len(week_52_low_opps) + len(golden_cross_opps)
+        
         html = f"""
         <html>
         <head>
@@ -205,6 +292,7 @@ class EmailAlertSystem:
         <body>
             <h1 style="color: #2c5aa0;">📈 Stock Screener: New Opportunities</h1>
             <p><em>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</em></p>
+            <p><strong>Total: {total_opps} opportunit{'y' if total_opps == 1 else 'ies'}</strong></p>
         """
         
         if dividend_opps:
@@ -221,7 +309,23 @@ class EmailAlertSystem:
             for opp in volatility_opps:
                 html += self.format_volatility_opportunity(opp)
         
-        if not dividend_opps and not volatility_opps:
+        if week_52_low_opps:
+            html += f"""
+            <h2>📉 52-Week Low Opportunities ({len(week_52_low_opps)})</h2>
+            <p style="font-style: italic; color: #666;">Quality stocks at yearly lows - contrarian value plays</p>
+            """
+            for opp in week_52_low_opps:
+                html += self.format_52_week_low_opportunity(opp)
+        
+        if golden_cross_opps:
+            html += f"""
+            <h2>🌟 Golden Cross Opportunities ({len(golden_cross_opps)})</h2>
+            <p style="font-style: italic; color: #666;">50-day MA crossed above 200-day MA - bullish momentum</p>
+            """
+            for opp in golden_cross_opps:
+                html += self.format_golden_cross_opportunity(opp)
+        
+        if total_opps == 0:
             html += """
             <p style="color: #7f8c8d; font-style: italic;">
                 No new opportunities today. All current opportunities were already alerted.
@@ -238,7 +342,9 @@ class EmailAlertSystem:
     def send_email(
         self, 
         dividend_opportunities: List[Dict[str, Any]], 
-        volatility_opportunities: List[Dict[str, Any]]
+        volatility_opportunities: List[Dict[str, Any]],
+        week_52_low_opportunities: List[Dict[str, Any]] = None,
+        golden_cross_opportunities: List[Dict[str, Any]] = None
     ) -> None:
         """
         Send email alert with new opportunities.
@@ -246,8 +352,14 @@ class EmailAlertSystem:
         Args:
             dividend_opportunities: List of dividend opportunities
             volatility_opportunities: List of volatility opportunities
+            week_52_low_opportunities: List of 52-week low opportunities
+            golden_cross_opportunities: List of golden cross opportunities
         """
-        total_opps = len(dividend_opportunities) + len(volatility_opportunities)
+        week_52_low_opportunities = week_52_low_opportunities or []
+        golden_cross_opportunities = golden_cross_opportunities or []
+        
+        total_opps = (len(dividend_opportunities) + len(volatility_opportunities) + 
+                     len(week_52_low_opportunities) + len(golden_cross_opportunities))
         
         if total_opps == 0:
             print("No new opportunities to email.")
@@ -264,7 +376,12 @@ class EmailAlertSystem:
             msg['Cc'] = self.cc_email
         
         # Create HTML body
-        html_body = self.create_email_html(dividend_opportunities, volatility_opportunities)
+        html_body = self.create_email_html(
+            dividend_opportunities, 
+            volatility_opportunities,
+            week_52_low_opportunities,
+            golden_cross_opportunities
+        )
         msg.attach(MIMEText(html_body, 'html'))
         
         # Send email
@@ -277,8 +394,10 @@ class EmailAlertSystem:
             print(f"✅ Email sent successfully to {self.recipient_email}")
             if self.cc_email:
                 print(f"   CC: {self.cc_email}")
-            print(f"   - {len(dividend_opportunities)} dividend opportunities")
-            print(f"   - {len(volatility_opportunities)} volatility opportunities")
+            print(f"   - {len(dividend_opportunities)} dividend")
+            print(f"   - {len(volatility_opportunities)} volatility")
+            print(f"   - {len(week_52_low_opportunities)} 52-week low")
+            print(f"   - {len(golden_cross_opportunities)} golden cross")
             
         except Exception as e:
             print(f"❌ Failed to send email: {e}")
@@ -288,6 +407,8 @@ class EmailAlertSystem:
         self,
         dividend_opportunities: List[Dict[str, Any]],
         volatility_opportunities: List[Dict[str, Any]],
+        week_52_low_opportunities: List[Dict[str, Any]] = None,
+        golden_cross_opportunities: List[Dict[str, Any]] = None,
         lookback_days: int = 1
     ) -> Dict[str, int]:
         """
@@ -296,11 +417,16 @@ class EmailAlertSystem:
         Args:
             dividend_opportunities: All dividend opportunities from screening
             volatility_opportunities: All volatility opportunities from screening
+            week_52_low_opportunities: All 52-week low opportunities
+            golden_cross_opportunities: All golden cross opportunities
             lookback_days: Days to check for duplicate alerts (default: 1 = yesterday only)
             
         Returns:
             Dict with counts of new opportunities sent
         """
+        week_52_low_opportunities = week_52_low_opportunities or []
+        golden_cross_opportunities = golden_cross_opportunities or []
+        
         # Filter to only NEW opportunities
         new_dividend = self.filter_new_opportunities(
             dividend_opportunities, 
@@ -312,14 +438,33 @@ class EmailAlertSystem:
             'volatility', 
             lookback_days
         )
+        new_52w_low = self.filter_new_opportunities(
+            week_52_low_opportunities,
+            '52_week_low',
+            lookback_days
+        )
+        new_golden_cross = self.filter_new_opportunities(
+            golden_cross_opportunities,
+            'golden_cross',
+            lookback_days
+        )
         
         print(f"\n=== Email Alert Processing ===")
         print(f"Dividend: {len(dividend_opportunities)} total, {len(new_dividend)} new")
         print(f"Volatility: {len(volatility_opportunities)} total, {len(new_volatility)} new")
+        print(f"52-Week Low: {len(week_52_low_opportunities)} total, {len(new_52w_low)} new")
+        print(f"Golden Cross: {len(golden_cross_opportunities)} total, {len(new_golden_cross)} new")
         
         # Send email if there are new opportunities
-        if new_dividend or new_volatility:
-            self.send_email(new_dividend, new_volatility)
+        total_new = len(new_dividend) + len(new_volatility) + len(new_52w_low) + len(new_golden_cross)
+        
+        if total_new > 0:
+            self.send_email(
+                new_dividend, 
+                new_volatility,
+                new_52w_low,
+                new_golden_cross
+            )
             
             # Record alerts in database
             for opp in new_dividend:
@@ -328,13 +473,23 @@ class EmailAlertSystem:
             for opp in new_volatility:
                 self.insert_alert(opp['ticker'], 'volatility', opp)
             
-            print(f"✅ Recorded {len(new_dividend) + len(new_volatility)} alerts in database")
+            for opp in new_52w_low:
+                self.insert_alert(opp['ticker'], '52_week_low', opp)
+            
+            for opp in new_golden_cross:
+                self.insert_alert(opp['ticker'], 'golden_cross', opp)
+            
+            print(f"✅ Recorded {total_new} alerts in database")
         else:
             print("ℹ️  No new opportunities to email (all were already alerted)")
         
         return {
             'new_dividend': len(new_dividend),
             'new_volatility': len(new_volatility),
+            'new_52_week_low': len(new_52w_low),
+            'new_golden_cross': len(new_golden_cross),
             'total_dividend': len(dividend_opportunities),
-            'total_volatility': len(volatility_opportunities)
+            'total_volatility': len(volatility_opportunities),
+            'total_52_week_low': len(week_52_low_opportunities),
+            'total_golden_cross': len(golden_cross_opportunities)
         }

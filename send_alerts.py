@@ -16,6 +16,10 @@ from screener_enhanced import (
     screen_volatility_opportunities,
     load_config
 )
+from screener_phase1 import (
+    screen_52_week_low,
+    screen_golden_cross
+)
 
 
 # Load .env file if it exists
@@ -39,7 +43,7 @@ def load_opportunities_from_screener():
     Run the screening logic and return opportunities.
     
     Returns:
-        Tuple of (dividend_opportunities, volatility_opportunities)
+        Dict with all strategy opportunities
     """
     print("=== Running Stock Screener ===\n")
     
@@ -61,7 +65,22 @@ def load_opportunities_from_screener():
         volatility_opps = screen_volatility_opportunities(db, config)
         print(f"✅ Found {len(volatility_opps)} volatility opportunities\n")
         
-        return dividend_opps, volatility_opps
+        # Run 52-week low screening
+        print("Running 52-week low screening...")
+        week_52_low_opps = screen_52_week_low(db, config)
+        print(f"✅ Found {len(week_52_low_opps)} at 52-week lows\n")
+        
+        # Run golden cross screening
+        print("Running golden cross screening...")
+        golden_cross_opps = screen_golden_cross(db, config)
+        print(f"✅ Found {len(golden_cross_opps)} golden cross opportunities\n")
+        
+        return {
+            'dividend': dividend_opps,
+            'volatility': volatility_opps,
+            '52_week_low': week_52_low_opps,
+            'golden_cross': golden_cross_opps
+        }
     
     finally:
         db.close()
@@ -71,26 +90,53 @@ def main():
     """Main execution: Run screener and send email alerts."""
     try:
         # Run screening
-        dividend_opps, volatility_opps = load_opportunities_from_screener()
+        all_opps = load_opportunities_from_screener()
         
         # Initialize email system
         email_system = EmailAlertSystem()
         
+        # Process and send alerts for each strategy
+        # Combine all opportunities for email
+        all_opportunities_list = [
+            *all_opps['dividend'],
+            *all_opps['volatility'],
+            *all_opps['52_week_low'],
+            *all_opps['golden_cross']
+        ]
+        
+        # Tag each opportunity with its strategy
+        for opp in all_opps['dividend']:
+            opp['strategy'] = 'dividend'
+        for opp in all_opps['volatility']:
+            opp['strategy'] = 'volatility'
+        for opp in all_opps['52_week_low']:
+            opp['strategy'] = '52_week_low'
+        for opp in all_opps['golden_cross']:
+            opp['strategy'] = 'golden_cross'
+        
         # Process and send alerts (only new opportunities)
         stats = email_system.process_and_send_alerts(
-            dividend_opps,
-            volatility_opps,
+            all_opps['dividend'],
+            all_opps['volatility'],
+            all_opps['52_week_low'],
+            all_opps['golden_cross'],
             lookback_days=1  # Only check yesterday
         )
         
         print("\n=== Summary ===")
-        print(f"Total opportunities found: {stats['total_dividend'] + stats['total_volatility']}")
-        print(f"New alerts sent: {stats['new_dividend'] + stats['new_volatility']}")
-        print(f"  - Dividend: {stats['new_dividend']}")
-        print(f"  - Volatility: {stats['new_volatility']}")
+        print(f"Dividend: {len(all_opps['dividend'])} found, {stats['new_dividend']} new")
+        print(f"Volatility: {len(all_opps['volatility'])} found, {stats['new_volatility']} new")
+        print(f"52-Week Low: {len(all_opps['52_week_low'])} found, {stats['new_52_week_low']} new")
+        print(f"Golden Cross: {len(all_opps['golden_cross'])} found, {stats['new_golden_cross']} new")
         
-        if stats['new_dividend'] + stats['new_volatility'] == 0:
-            print("\nℹ️  No email sent (no new opportunities)")
+        total_found = sum(len(opps) for opps in all_opps.values())
+        total_new = (stats['new_dividend'] + stats['new_volatility'] + 
+                    stats['new_52_week_low'] + stats['new_golden_cross'])
+        
+        print(f"\nTotal: {total_found} opportunities, {total_new} new alerts sent")
+        
+        if total_new == 0:
+            print("ℹ️  No email sent (no new opportunities)")
         
         return 0
         
