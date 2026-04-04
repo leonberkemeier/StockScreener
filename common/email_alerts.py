@@ -137,6 +137,14 @@ class EmailAlertSystem:
     
     def format_dividend_opportunity(self, opp: Dict[str, Any]) -> str:
         """Format a dividend opportunity as HTML."""
+        # Format volatility for display
+        volatility = opp.get('volatility', 0)
+        if isinstance(volatility, (int, float)) and volatility > 0:
+            volatility_str = f"{volatility*100:.2f}%" if volatility < 1 else f"{volatility:.2f}%"
+            volatility_display = f"<p style=\"margin: 5px 0;\"><strong>Volatility:</strong> {volatility_str}</p>"
+        else:
+            volatility_display = ""
+        
         return f"""
         <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
             <h3 style="margin-top: 0; color: #2c5aa0;">
@@ -164,12 +172,27 @@ class EmailAlertSystem:
             
             <p><strong>P/E Ratio:</strong> {opp.get('pe_ratio', 'N/A')}</p>
             <p><strong>Payout Ratio:</strong> {opp.get('payout_ratio', 'N/A')}</p>
+            {volatility_display}
             <p><strong>Market Cap:</strong> €{opp.get('market_cap_eur', 0)/1e9:.1f}B</p>
         </div>
         """
     
     def format_volatility_opportunity(self, opp: Dict[str, Any]) -> str:
         """Format a volatility opportunity as HTML."""
+        # Format volatility as percentage if it's a decimal
+        volatility = opp.get('volatility', 0)
+        if isinstance(volatility, (int, float)) and volatility > 0:
+            volatility_str = f"{volatility*100:.2f}%" if volatility < 1 else f"{volatility:.2f}%"
+        else:
+            volatility_str = str(volatility)
+        
+        # Format beta
+        beta = opp.get('beta', 'N/A')
+        if isinstance(beta, (int, float)):
+            beta_str = f"{beta:.2f}"
+        else:
+            beta_str = str(beta)
+        
         return f"""
         <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
             <h3 style="margin-top: 0; color: #8e44ad;">
@@ -186,9 +209,9 @@ class EmailAlertSystem:
                 </p>
             </div>
             
-            <div style="background: #fef5e7; padding: 10px; margin: 10px 0;">
-                <p style="margin: 5px 0;"><strong>Beta:</strong> {opp.get('beta', 'N/A')}</p>
-                <p style="margin: 5px 0;"><strong>Volatility:</strong> {opp.get('volatility', 'N/A')}</p>
+            <div style="background: #fef5e7; padding: 10px; margin: 10px 0; border-left: 4px solid #e74c3c;">
+                <p style="margin: 5px 0;"><strong>📊 Volatility (Annualized):</strong> <span style="color: #e74c3c; font-weight: bold; font-size: 1.1em;">{volatility_str}</span></p>
+                <p style="margin: 5px 0;"><strong>Beta (Market Risk):</strong> <span style="font-weight: bold;">{beta_str}</span></p>
             </div>
             
             <p><strong>P/E Ratio:</strong> {opp.get('pe_ratio', 'N/A')}</p>
