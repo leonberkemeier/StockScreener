@@ -70,7 +70,7 @@ def screen_52_week_low(db: StockDatabase, config: Dict) -> List[Dict]:
         # Get price history
         prices = get_price_history(db, ticker, days=252)
         
-        if len(prices) < 100:  # Need at least 100 days
+        if len(prices) < 3:  # Need at least 3 data points (reduced from 100 due to limited recent data)
             continue
         
         # Calculate technical indicators
@@ -78,6 +78,14 @@ def screen_52_week_low(db: StockDatabase, config: Dict) -> List[Dict]:
         
         if not indicators['week_52_low']:
             continue
+        
+        # Convert pe_ratio to float if it's a string
+        pe_ratio = stock['pe_ratio']
+        if isinstance(pe_ratio, str):
+            try:
+                pe_ratio = float(pe_ratio)
+            except (ValueError, TypeError):
+                pe_ratio = 0
         
         # Check if near 52-week low
         distance_from_low = (current_price - indicators['week_52_low']) / indicators['week_52_low']
@@ -92,9 +100,10 @@ def screen_52_week_low(db: StockDatabase, config: Dict) -> List[Dict]:
                 if dividend_yield > 1:
                     dividend_yield = dividend_yield / 100
                 
+                pe_str = f"{pe_ratio:.1f}" if pe_ratio > 0 else "N/A"
                 reason = (f"Trading at 52-week low (€{indicators['week_52_low']:.2f}). "
                          f"Current: €{current_price:.2f} ({distance_from_low*100:.1f}% above low). "
-                         f"Strong fundamentals: P/E {stock['pe_ratio']:.1f}, "
+                         f"Strong fundamentals: P/E {pe_str}, "
                          f"Yield {dividend_yield*100:.1f}%.")
                 
                 if indicators['rsi']:
@@ -161,20 +170,35 @@ def screen_golden_cross(db: StockDatabase, config: Dict) -> List[Dict]:
         if not current_price:
             continue
         
-        # Need P/E check
-        if stock['pe_ratio'] > 0 and stock['pe_ratio'] > thresholds['max_pe_ratio']:
+        # Need P/E check - convert to float in case it's a string
+        pe_ratio = stock['pe_ratio']
+        if isinstance(pe_ratio, str):
+            try:
+                pe_ratio = float(pe_ratio)
+            except (ValueError, TypeError):
+                pe_ratio = 0
+        
+        if pe_ratio > 0 and pe_ratio > thresholds['max_pe_ratio']:
             continue
         
         # Get price history (need 200+ days for 200-day MA)
         prices = get_price_history(db, ticker, days=252)
         
-        if len(prices) < 200:
+        if len(prices) < 3:  # Need at least 3 data points (reduced from 200 due to limited recent data)
             continue
         
         # Detect golden cross
         golden_cross, ma_50, ma_200 = detect_golden_cross(prices, thresholds['lookback_days'])
         
         if golden_cross:
+            # Convert pe_ratio to float if it's a string
+            pe_ratio_gc = stock['pe_ratio']
+            if isinstance(pe_ratio_gc, str):
+                try:
+                    pe_ratio_gc = float(pe_ratio_gc)
+                except (ValueError, TypeError):
+                    pe_ratio_gc = 0
+            
             # Check dividend yield if specified
             dividend_yield = stock['dividend_yield']
             if dividend_yield > 1:
@@ -192,8 +216,8 @@ def screen_golden_cross(db: StockDatabase, config: Dict) -> List[Dict]:
                          f"crossed above 200-day MA (€{ma_200:.2f}). "
                          f"Strong bullish momentum signal. ")
                 
-                if stock['pe_ratio'] > 0:
-                    reason += f"P/E: {stock['pe_ratio']:.1f}. "
+                if pe_ratio_gc > 0:
+                    reason += f"P/E: {pe_ratio_gc:.1f}. "
                 
                 if dividend_yield > 0:
                     reason += f"Yield: {dividend_yield*100:.1f}%."

@@ -57,6 +57,10 @@ def screen_dividend_opportunities(db: StockDatabase, config: Dict) -> List[Dict]
     print(f"Found {len(top_dividend)} dividend-paying stocks")
     
     opportunities = []
+    filtered_count = 0
+    no_history_count = 0
+    no_expansion_count = 0
+    already_alerted_count = 0
     
     for stock in top_dividend:
         ticker = stock['ticker']
@@ -71,12 +75,14 @@ def screen_dividend_opportunities(db: StockDatabase, config: Dict) -> List[Dict]
                 stock['pe_ratio'] > 0 and 
                 stock['pe_ratio'] <= thresholds['max_pe_ratio'] and
                 stock['market_cap_eur'] >= thresholds['min_market_cap_eur']):
+            filtered_count += 1
             continue
         
         # Get 90 days of historical data
         history = db.get_stock_history(ticker, days=90)
         
-        if len(history) < 30:  # Need at least 30 days
+        if len(history) < 3:  # Need at least 3 data points (reduced from 30 due to limited recent data)
+            no_history_count += 1
             continue
         
         # Yield from yfinance is already a ratio (e.g., 0.035 = 3.5%)
@@ -134,9 +140,18 @@ def screen_dividend_opportunities(db: StockDatabase, config: Dict) -> List[Dict]
                     'market_cap_eur': stock['market_cap_eur'],
                     'reason': reason
                 })
+            else:
+                already_alerted_count += 1
+        else:
+            no_expansion_count += 1
     
     # Sort by absolute yield expansion (best opportunities first)
     opportunities.sort(key=lambda x: x['yield_expansion_pp'], reverse=True)
+    
+    print(f"  Filtered by criteria: {filtered_count}")
+    print(f"  No sufficient history: {no_history_count}")
+    print(f"  No yield expansion: {no_expansion_count}")
+    print(f"  Already alerted: {already_alerted_count}")
     
     return opportunities
 
@@ -153,61 +168,78 @@ def screen_volatility_opportunities(db: StockDatabase, config: Dict) -> List[Dic
     print(f"Found {len(top_volatility)} high-volatility stocks")
     
     opportunities = []
+    filtered_count = 0
+    no_history_count = 0
+    no_dip_count = 0
+    already_alerted_count = 0
     
     for stock in top_volatility:
         ticker = stock['ticker']
         
         # Check basic criteria
-        if (stock['market_cap_eur'] >= thresholds['min_market_cap_eur'] and
+        if not (stock['market_cap_eur'] >= thresholds['min_market_cap_eur'] and
             (stock['beta'] >= thresholds['min_beta'] or 
              stock['volatility'] >= thresholds['min_volatility'])):
+            filtered_count += 1
+            continue
+        
+        # Check P/E if available
+        if stock['pe_ratio'] > 0 and stock['pe_ratio'] > thresholds['max_pe_ratio']:
+            filtered_count += 1
+            continue
+        
+        # Get 90 days of history for better analysis
+        history = db.get_stock_history(ticker, days=90)
+        
+        if len(history) < 3:  # Need at least 3 data points (reduced from 30 due to limited recent data)
+            no_history_count += 1
+            continue
+        
+        # Calculate 90-day high
+        high_90d = max(h['price_eur'] for h in history if h['price_eur'])
+        
+        # Check for dip from 90-day high
+        if high_90d and stock['price_eur']:
+            drop_from_high = (stock['price_eur'] - high_90d) / high_90d
             
-            # Check P/E if available
-            if stock['pe_ratio'] > 0 and stock['pe_ratio'] > thresholds['max_pe_ratio']:
-                continue
-            
-            # Get 90 days of history for better analysis
-            history = db.get_stock_history(ticker, days=90)
-            
-            if len(history) < 30:
-                continue
-            
-            # Calculate 90-day high
-            high_90d = max(h['price_eur'] for h in history if h['price_eur'])
-            
-            # Check for dip from 90-day high
-            if high_90d and stock['price_eur']:
-                drop_from_high = (stock['price_eur'] - high_90d) / high_90d
+            if drop_from_high <= -thresholds['min_drop_from_high']:
+                # Check for duplicate alerts
+                recent_alerts = db.get_recent_alerts(ticker, 
+                                                    config['alerts']['duplicate_alert_days'])
                 
-                if drop_from_high <= -thresholds['min_drop_from_high']:
-                    # Check for duplicate alerts
-                    recent_alerts = db.get_recent_alerts(ticker, 
-                                                        config['alerts']['duplicate_alert_days'])
+                if not recent_alerts:
+                    reason = (f"High volatility stock (beta {stock['beta']:.2f}) "
+                            f"down {abs(drop_from_high)*100:.1f}% from 90-day high. ")
                     
-                    if not recent_alerts:
-                        reason = (f"High volatility stock (beta {stock['beta']:.2f}) "
-                                f"down {abs(drop_from_high)*100:.1f}% from 90-day high. ")
-                        
-                        if stock['pe_ratio'] > 0:
-                            reason += f"P/E: {stock['pe_ratio']:.1f}."
-                        
-                        opportunities.append({
-                            'ticker': ticker,
-                            'name': stock['name'],
-                            'sector': stock['sector'],
-                            'country': stock['country'],
-                            'price_eur': stock['price_eur'],
-                            'high_90d': high_90d,
-                            'beta': stock['beta'],
-                            'volatility': stock['volatility'],
-                            'pe_ratio': stock['pe_ratio'],
-                            'market_cap_eur': stock['market_cap_eur'],
-                            'drop_from_high': drop_from_high,
-                            'reason': reason
-                        })
+                    if stock['pe_ratio'] > 0:
+                        reason += f"P/E: {stock['pe_ratio']:.1f}."
+                    
+                    opportunities.append({
+                        'ticker': ticker,
+                        'name': stock['name'],
+                        'sector': stock['sector'],
+                        'country': stock['country'],
+                        'price_eur': stock['price_eur'],
+                        'high_90d': high_90d,
+                        'beta': stock['beta'],
+                        'volatility': stock['volatility'],
+                        'pe_ratio': stock['pe_ratio'],
+                        'market_cap_eur': stock['market_cap_eur'],
+                        'drop_from_high': drop_from_high,
+                        'reason': reason
+                    })
+                else:
+                    already_alerted_count += 1
+            else:
+                no_dip_count += 1
     
     # Sort by drop magnitude
     opportunities.sort(key=lambda x: x['drop_from_high'])
+    
+    print(f"  Filtered by criteria: {filtered_count}")
+    print(f"  No sufficient history: {no_history_count}")
+    print(f"  No significant dip: {no_dip_count}")
+    print(f"  Already alerted: {already_alerted_count}")
     
     return opportunities
 
