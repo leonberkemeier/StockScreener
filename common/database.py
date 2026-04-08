@@ -292,26 +292,38 @@ class StockDatabase:
         return [dict(row) for row in self.cursor.fetchall()]
     
     def get_top_alerted_opportunities(self, strategy: str, limit: int = 20) -> List[Dict]:
-        """Get the top alerted opportunities by frequency (best overall).
+        """Get the top alerted opportunities by frequency (best overall) with stock details.
         
         Args:
             strategy: 'dividend' or 'volatility'
             limit: Number of top opportunities to return
             
         Returns:
-            List of top opportunities with alert details
+            List of top opportunities with alert details and stock info
         """
         self.cursor.execute("""
             SELECT 
-                ticker,
+                a.ticker,
+                s.name,
+                s.sector,
+                s.country,
                 COUNT(*) as alert_count,
-                MAX(alert_date) as last_alerted,
-                MIN(alert_date) as first_alerted,
-                AVG(price_eur) as avg_price_at_alert
-            FROM alerts
-            WHERE strategy = ?
-            GROUP BY ticker
-            ORDER BY alert_count DESC, last_alerted DESC
+                MAX(a.alert_date) as last_alerted,
+                MIN(a.alert_date) as first_alerted,
+                AVG(a.price_eur) as avg_price_at_alert,
+                sd.price_eur,
+                sd.dividend_yield,
+                sd.pe_ratio,
+                sd.volatility,
+                sd.beta,
+                sd.market_cap_eur
+            FROM alerts a
+            LEFT JOIN stocks s ON a.ticker = s.ticker
+            LEFT JOIN stock_data sd ON a.ticker = sd.ticker 
+                AND sd.date = (SELECT MAX(date) FROM stock_data WHERE ticker = a.ticker)
+            WHERE a.strategy = ?
+            GROUP BY a.ticker
+            ORDER BY alert_count DESC, MAX(a.alert_date) DESC
             LIMIT ?
         """, (strategy, limit))
         

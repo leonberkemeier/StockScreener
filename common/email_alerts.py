@@ -280,20 +280,93 @@ class EmailAlertSystem:
         </div>
         """
     
-    def format_top_opportunity_summary(self, ticker: str, alert_data: Dict) -> str:
-        """Format top opportunity as a compact summary line."""
-        last_alerted = alert_data.get('last_alerted', 'N/A')
-        alert_count = alert_data.get('alert_count', 0)
-        avg_price = alert_data.get('avg_price_at_alert', 0)
+    def format_top_opportunity_card(self, opp: Dict[str, Any], strategy: str) -> str:
+        """Format top opportunity as a detailed card (matching new opportunities style)."""
+        ticker = opp.get('ticker', 'N/A')
+        name = opp.get('name', 'N/A')
+        sector = opp.get('sector', 'N/A')
+        country = opp.get('country', 'N/A')
+        price = opp.get('price_eur', 0)
+        alert_count = opp.get('alert_count', 0)
         
-        return f"""
-        <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>{ticker}</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">{alert_count}x</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€{avg_price:.2f}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; color: #888; font-size: 0.9em;">{last_alerted}</td>
-        </tr>
+        # Format volatility if available
+        volatility = opp.get('volatility', 0)
+        if isinstance(volatility, (int, float)) and volatility > 0:
+            volatility_str = f"{volatility*100:.2f}%" if volatility < 1 else f"{volatility:.2f}%"
+            volatility_display = f"<p style=\"margin: 5px 0;\"><strong>Volatility:</strong> {volatility_str}</p>"
+        else:
+            volatility_display = ""
+        
+        # Format beta if available
+        beta = opp.get('beta', 0)
+        if isinstance(beta, (int, float)) and beta > 0:
+            beta_str = f"{beta:.2f}"
+        else:
+            beta_str = "N/A"
+        
+        # Choose color based on strategy
+        color = "#2c5aa0" if strategy == 'dividend' else "#8e44ad"
+        emoji = "💰" if strategy == 'dividend' else "⚡"
+        
+        # Format dividend yield if available
+        div_yield = opp.get('dividend_yield', 0)
+        if isinstance(div_yield, (int, float)):
+            if div_yield > 1:
+                div_yield = div_yield / 100
+            div_yield_str = f"{div_yield*100:.2f}%"
+        else:
+            div_yield_str = "N/A"
+        
+        # Format PE ratio
+        pe_ratio = opp.get('pe_ratio', 0)
+        if isinstance(pe_ratio, str):
+            try:
+                pe_ratio = float(pe_ratio)
+            except (ValueError, TypeError):
+                pe_ratio = 0
+        pe_str = f"{pe_ratio:.1f}" if pe_ratio > 0 else "N/A"
+        
+        # Format market cap
+        market_cap = opp.get('market_cap_eur', 0)
+        if market_cap:
+            market_cap_str = f"€{market_cap/1e9:.1f}B"
+        else:
+            market_cap_str = "N/A"
+        
+        html = f"""
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; background: #fafafa;">
+            <h3 style="margin-top: 0; color: {color};">
+                {emoji} {ticker} - {name}
+            </h3>
+            <p><strong>Sector:</strong> {sector} | <strong>Country:</strong> {country}</p>
+            
+            <div style="background: #fff; padding: 10px; margin: 10px 0; border-left: 3px solid {color};">
+                <p style="margin: 5px 0;"><strong>Current Price:</strong> €{price:.2f}</p>
+                <p style="margin: 5px 0;"><strong>Alerted:</strong> {alert_count}x (proven winner)</p>
+            </div>
+            
+            <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
+                <p style="margin: 5px 0;"><strong>Dividend Yield:</strong> {div_yield_str}</p>
+                <p style="margin: 5px 0;"><strong>P/E Ratio:</strong> {pe_str}</p>
+                {volatility_display}
         """
+        
+        if strategy == 'volatility':
+            html += f"""
+                <p style="margin: 5px 0;"><strong>Beta (Market Risk):</strong> {beta_str}</p>
+            </div>
+            """
+        else:
+            html += """
+            </div>
+            """
+        
+        html += f"""
+            <p><strong>Market Cap:</strong> {market_cap_str}</p>
+        </div>
+        """
+        
+        return html
     
     def create_enhanced_email_html(
         self,
@@ -349,41 +422,25 @@ class EmailAlertSystem:
             <p><strong>Total New Opportunities:</strong> {total_new}</p>
         """
         
-        # SECTION 1: TOP 20 BEST (Summary)
+        # SECTION 1: TOP 20 BEST (Detailed Cards)
         if top_dividend or top_volatility:
             html += """
-            <h2>🏆 TOP 20 BEST OPPORTUNITIES (All-Time Best from Database)</h2>
+            <h2>🏆 TOP 20 BEST OPPORTUNITIES (Proven Winners)</h2>
             """
             
             if top_dividend:
                 html += """
                 <h3>💰 Top Dividend Opportunities</h3>
-                <table>
-                    <tr>
-                        <th>Ticker</th>
-                        <th>Alerts</th>
-                        <th>Avg Price</th>
-                        <th>Last Alerted</th>
-                    </tr>
                 """
                 for opp in top_dividend[:20]:
-                    html += self.format_top_opportunity_summary(opp['ticker'], opp)
-                html += "</table>"
+                    html += self.format_top_opportunity_card(opp, 'dividend')
             
             if top_volatility:
                 html += """
                 <h3>⚡ Top Volatility Opportunities</h3>
-                <table>
-                    <tr>
-                        <th>Ticker</th>
-                        <th>Alerts</th>
-                        <th>Avg Price</th>
-                        <th>Last Alerted</th>
-                    </tr>
                 """
                 for opp in top_volatility[:20]:
-                    html += self.format_top_opportunity_summary(opp['ticker'], opp)
-                html += "</table>"
+                    html += self.format_top_opportunity_card(opp, 'volatility')
         
         # SECTION 2: NEW OPPORTUNITIES (Detailed)
         if total_new > 0:
