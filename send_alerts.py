@@ -95,14 +95,16 @@ def main():
         # Initialize email system
         email_system = EmailAlertSystem()
         
-        # Process and send alerts for each strategy
-        # Combine all opportunities for email
-        all_opportunities_list = [
-            *all_opps['dividend'],
-            *all_opps['volatility'],
-            *all_opps['52_week_low'],
-            *all_opps['golden_cross']
-        ]
+        # Connect to database for top 20 best opportunities
+        db = StockDatabase()
+        db.connect()
+        
+        try:
+            # Get top 20 best opportunities from alerts history
+            top_dividend = db.get_top_alerted_opportunities('dividend', limit=20)
+            top_volatility = db.get_top_alerted_opportunities('volatility', limit=20)
+        finally:
+            db.close()
         
         # Tag each opportunity with its strategy
         for opp in all_opps['dividend']:
@@ -115,11 +117,13 @@ def main():
             opp['strategy'] = 'golden_cross'
         
         # Process and send alerts (only new opportunities)
-        stats = email_system.process_and_send_alerts(
+        stats = email_system.process_and_send_alerts_with_top_20(
             all_opps['dividend'],
             all_opps['volatility'],
             all_opps['52_week_low'],
             all_opps['golden_cross'],
+            top_dividend,
+            top_volatility,
             lookback_days=1  # Only check yesterday
         )
         

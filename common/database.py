@@ -291,6 +291,33 @@ class StockDatabase:
         """, (ticker, days))
         return [dict(row) for row in self.cursor.fetchall()]
     
+    def get_top_alerted_opportunities(self, strategy: str, limit: int = 20) -> List[Dict]:
+        """Get the top alerted opportunities by frequency (best overall).
+        
+        Args:
+            strategy: 'dividend' or 'volatility'
+            limit: Number of top opportunities to return
+            
+        Returns:
+            List of top opportunities with alert details
+        """
+        self.cursor.execute("""
+            SELECT 
+                ticker,
+                COUNT(*) as alert_count,
+                MAX(alert_date) as last_alerted,
+                MIN(alert_date) as first_alerted,
+                AVG(price_eur) as avg_price_at_alert
+            FROM alerts
+            WHERE strategy = ?
+            GROUP BY ticker
+            ORDER BY alert_count DESC, last_alerted DESC
+            LIMIT ?
+        """, (strategy, limit))
+        
+        columns = [desc[0] for desc in self.cursor.description]
+        return [dict(zip(columns, row)) for row in self.cursor.fetchall()]
+    
     def get_stats(self) -> Dict:
         """Get database statistics."""
         stats = {}

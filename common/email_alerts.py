@@ -280,6 +280,169 @@ class EmailAlertSystem:
         </div>
         """
     
+    def format_top_opportunity_summary(self, ticker: str, alert_data: Dict) -> str:
+        """Format top opportunity as a compact summary line."""
+        last_alerted = alert_data.get('last_alerted', 'N/A')
+        alert_count = alert_data.get('alert_count', 0)
+        avg_price = alert_data.get('avg_price_at_alert', 0)
+        
+        return f"""
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>{ticker}</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">{alert_count}x</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€{avg_price:.2f}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; color: #888; font-size: 0.9em;">{last_alerted}</td>
+        </tr>
+        """
+    
+    def create_enhanced_email_html(
+        self,
+        top_dividend: List[Dict] = None,
+        top_volatility: List[Dict] = None,
+        new_dividend: List[Dict[str, Any]] = None,
+        new_volatility: List[Dict[str, Any]] = None,
+        new_52w_low: List[Dict[str, Any]] = None,
+        new_golden_cross: List[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Create enhanced HTML email with top 20 best + new opportunities.
+        
+        Args:
+            top_dividend: Top 20 best dividend opportunities (from alerts)
+            top_volatility: Top 20 best volatility opportunities (from alerts)
+            new_dividend: New dividend opportunities
+            new_volatility: New volatility opportunities
+            new_52w_low: New 52-week low opportunities
+            new_golden_cross: New golden cross opportunities
+            
+        Returns:
+            HTML string
+        """
+        top_dividend = top_dividend or []
+        top_volatility = top_volatility or []
+        new_dividend = new_dividend or []
+        new_volatility = new_volatility or []
+        new_52w_low = new_52w_low or []
+        new_golden_cross = new_golden_cross or []
+        
+        total_new = len(new_dividend) + len(new_volatility) + len(new_52w_low) + len(new_golden_cross)
+        
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                h1 {{ color: #2c5aa0; margin-bottom: 5px; }}
+                h2 {{ color: #333; border-bottom: 3px solid #2c5aa0; padding-bottom: 10px; margin-top: 25px; }}
+                h3 {{ color: #555; margin-top: 15px; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+                th {{ background: #f0f0f0; padding: 10px; text-align: left; border-bottom: 2px solid #2c5aa0; }}
+                td {{ padding: 8px; border-bottom: 1px solid #eee; }}
+                .section-new {{ background: #e8f4f8; padding: 15px; margin: 20px 0; border-left: 4px solid #2c5aa0; border-radius: 3px; }}
+                .section-top {{ background: #f9f9f9; padding: 15px; margin: 20px 0; }}
+                .timestamp {{ color: #888; font-size: 0.9em; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <h1>📈 Stock Screener Daily Report</h1>
+            <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d')}</p>
+            <p><strong>Total New Opportunities:</strong> {total_new}</p>
+        """
+        
+        # SECTION 1: TOP 20 BEST (Summary)
+        if top_dividend or top_volatility:
+            html += """
+            <h2>🏆 TOP 20 BEST OPPORTUNITIES (All-Time Best from Database)</h2>
+            """
+            
+            if top_dividend:
+                html += """
+                <h3>💰 Top Dividend Opportunities</h3>
+                <table>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Alerts</th>
+                        <th>Avg Price</th>
+                        <th>Last Alerted</th>
+                    </tr>
+                """
+                for opp in top_dividend[:20]:
+                    html += self.format_top_opportunity_summary(opp['ticker'], opp)
+                html += "</table>"
+            
+            if top_volatility:
+                html += """
+                <h3>⚡ Top Volatility Opportunities</h3>
+                <table>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Alerts</th>
+                        <th>Avg Price</th>
+                        <th>Last Alerted</th>
+                    </tr>
+                """
+                for opp in top_volatility[:20]:
+                    html += self.format_top_opportunity_summary(opp['ticker'], opp)
+                html += "</table>"
+        
+        # SECTION 2: NEW OPPORTUNITIES (Detailed)
+        if total_new > 0:
+            html += f"""
+            <div class="section-new">
+                <h2>🆕 NEW OPPORTUNITIES TODAY ({total_new} new)</h2>
+            </div>
+            """
+            
+            if new_dividend:
+                html += f"""
+                <h3>💰 New Dividend Opportunities ({len(new_dividend)})</h3>
+                """
+                for opp in new_dividend:
+                    html += self.format_dividend_opportunity(opp)
+            
+            if new_volatility:
+                html += f"""
+                <h3>⚡ New Volatility Opportunities ({len(new_volatility)})</h3>
+                """
+                for opp in new_volatility:
+                    html += self.format_volatility_opportunity(opp)
+            
+            if new_52w_low:
+                html += f"""
+                <h3>📉 New 52-Week Low Opportunities ({len(new_52w_low)})</h3>
+                <p style="font-style: italic; color: #666;">Quality stocks at yearly lows - contrarian value plays</p>
+                """
+                for opp in new_52w_low:
+                    html += self.format_52_week_low_opportunity(opp)
+            
+            if new_golden_cross:
+                html += f"""
+                <h3>🌟 New Golden Cross Opportunities ({len(new_golden_cross)})</h3>
+                <p style="font-style: italic; color: #666;">50-day MA crossed above 200-day MA - bullish momentum</p>
+                """
+                for opp in new_golden_cross:
+                    html += self.format_golden_cross_opportunity(opp)
+        else:
+            html += """
+            <div class="section-new">
+                <p style="color: #7f8c8d; font-style: italic;">
+                    ✓ No new opportunities today. All current opportunities were already alerted.
+                </p>
+            </div>
+            """
+        
+        html += f"""
+        <div class="timestamp">
+            <p><em>Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</em></p>
+            <p><em>Stock Screener v2 - Automated Daily Report</em></p>
+        </div>
+        
+        </body>
+        </html>
+        """
+        
+        return html
+    
     def create_email_html(
         self, 
         dividend_opps: List[Dict[str, Any]], 
@@ -361,6 +524,80 @@ class EmailAlertSystem:
         """
         
         return html
+    
+    def send_email_with_top_20(
+        self,
+        top_dividend_opps: List[Dict] = None,
+        top_volatility_opps: List[Dict] = None,
+        new_dividend_opportunities: List[Dict[str, Any]] = None,
+        new_volatility_opportunities: List[Dict[str, Any]] = None,
+        new_week_52_low_opportunities: List[Dict[str, Any]] = None,
+        new_golden_cross_opportunities: List[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Send enhanced email with top 20 best + new opportunities.
+        
+        Args:
+            top_dividend_opps: Top 20 best dividend opportunities
+            top_volatility_opps: Top 20 best volatility opportunities
+            new_dividend_opportunities: New dividend opportunities
+            new_volatility_opportunities: New volatility opportunities
+            new_week_52_low_opportunities: New 52-week low opportunities
+            new_golden_cross_opportunities: New golden cross opportunities
+        """
+        top_dividend_opps = top_dividend_opps or []
+        top_volatility_opps = top_volatility_opps or []
+        new_dividend_opportunities = new_dividend_opportunities or []
+        new_volatility_opportunities = new_volatility_opportunities or []
+        new_week_52_low_opportunities = new_week_52_low_opportunities or []
+        new_golden_cross_opportunities = new_golden_cross_opportunities or []
+        
+        total_new = (len(new_dividend_opportunities) + len(new_volatility_opportunities) + 
+                     len(new_week_52_low_opportunities) + len(new_golden_cross_opportunities))
+        
+        # Create email
+        msg = MIMEMultipart('alternative')
+        subject = f"Stock Screener Report: {total_new} New Opportunit{'y' if total_new == 1 else 'ies'}"
+        if not total_new:
+            subject = "Stock Screener Report: No New Opportunities"
+        msg['Subject'] = subject
+        msg['From'] = self.sender_email
+        msg['To'] = self.recipient_email
+        
+        # Add CC if configured
+        if self.cc_email:
+            msg['Cc'] = self.cc_email
+        
+        # Create enhanced HTML body
+        html_body = self.create_enhanced_email_html(
+            top_dividend=top_dividend_opps,
+            top_volatility=top_volatility_opps,
+            new_dividend=new_dividend_opportunities,
+            new_volatility=new_volatility_opportunities,
+            new_52w_low=new_week_52_low_opportunities,
+            new_golden_cross=new_golden_cross_opportunities
+        )
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        # Send email
+        try:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.sender_email, self.sender_password)
+                server.send_message(msg)
+            
+            print(f"✅ Email sent successfully to {self.recipient_email}")
+            if self.cc_email:
+                print(f"   CC: {self.cc_email}")
+            print(f"   New opportunities: {total_new}")
+            print(f"   - {len(new_dividend_opportunities)} dividend")
+            print(f"   - {len(new_volatility_opportunities)} volatility")
+            print(f"   - {len(new_week_52_low_opportunities)} 52-week low")
+            print(f"   - {len(new_golden_cross_opportunities)} golden cross")
+            
+        except Exception as e:
+            print(f"❌ Failed to send email: {e}")
+            raise
     
     def send_email(
         self, 
@@ -516,3 +753,105 @@ class EmailAlertSystem:
             'total_52_week_low': len(week_52_low_opportunities),
             'total_golden_cross': len(golden_cross_opportunities)
         }
+    
+    def process_and_send_alerts_with_top_20(
+        self,
+        dividend_opportunities: List[Dict[str, Any]],
+        volatility_opportunities: List[Dict[str, Any]],
+        week_52_low_opportunities: List[Dict[str, Any]] = None,
+        golden_cross_opportunities: List[Dict[str, Any]] = None,
+        top_dividend_from_db: List[Dict] = None,
+        top_volatility_from_db: List[Dict] = None,
+        lookback_days: int = 1
+    ) -> Dict[str, int]:
+        """
+        Main method: Filter new opportunities, send enhanced email with top 20 + new, and record alerts.
+        
+        Args:
+            dividend_opportunities: All dividend opportunities from screening
+            volatility_opportunities: All volatility opportunities from screening
+            week_52_low_opportunities: All 52-week low opportunities
+            golden_cross_opportunities: All golden cross opportunities
+            top_dividend_from_db: Top 20 best dividend opportunities from database
+            top_volatility_from_db: Top 20 best volatility opportunities from database
+            lookback_days: Days to check for duplicate alerts (default: 1 = yesterday only)
+            
+        Returns:
+            Dict with counts of new opportunities sent
+        """
+        week_52_low_opportunities = week_52_low_opportunities or []
+        golden_cross_opportunities = golden_cross_opportunities or []
+        top_dividend_from_db = top_dividend_from_db or []
+        top_volatility_from_db = top_volatility_from_db or []
+        
+        # Filter to only NEW opportunities
+        new_dividend = self.filter_new_opportunities(
+            dividend_opportunities, 
+            'dividend', 
+            lookback_days
+        )
+        new_volatility = self.filter_new_opportunities(
+            volatility_opportunities, 
+            'volatility', 
+            lookback_days
+        )
+        new_52w_low = self.filter_new_opportunities(
+            week_52_low_opportunities,
+            '52_week_low',
+            lookback_days
+        )
+        new_golden_cross = self.filter_new_opportunities(
+            golden_cross_opportunities,
+            'golden_cross',
+            lookback_days
+        )
+        
+        print(f"\n=== Email Alert Processing (Enhanced with Top 20) ===")
+        print(f"Dividend: {len(dividend_opportunities)} total, {len(new_dividend)} new")
+        print(f"Volatility: {len(volatility_opportunities)} total, {len(new_volatility)} new")
+        print(f"52-Week Low: {len(week_52_low_opportunities)} total, {len(new_52w_low)} new")
+        print(f"Golden Cross: {len(golden_cross_opportunities)} total, {len(new_golden_cross)} new")
+        print(f"Top 20 dividend from database: {len(top_dividend_from_db)}")
+        print(f"Top 20 volatility from database: {len(top_volatility_from_db)}")
+        
+        # Send enhanced email with top 20 + new
+        total_new = len(new_dividend) + len(new_volatility) + len(new_52w_low) + len(new_golden_cross)
+        
+        self.send_email_with_top_20(
+            top_dividend_opps=top_dividend_from_db,
+            top_volatility_opps=top_volatility_from_db,
+            new_dividend_opportunities=new_dividend,
+            new_volatility_opportunities=new_volatility,
+            new_week_52_low_opportunities=new_52w_low,
+            new_golden_cross_opportunities=new_golden_cross
+        )
+        
+        if total_new > 0:
+            # Record alerts in database
+            for opp in new_dividend:
+                self.insert_alert(opp['ticker'], 'dividend', opp)
+            
+            for opp in new_volatility:
+                self.insert_alert(opp['ticker'], 'volatility', opp)
+            
+            for opp in new_52w_low:
+                self.insert_alert(opp['ticker'], '52_week_low', opp)
+            
+            for opp in new_golden_cross:
+                self.insert_alert(opp['ticker'], 'golden_cross', opp)
+            
+            print(f"✅ Recorded {total_new} alerts in database")
+        else:
+            print("ℹ️  No new opportunities to email (all were already alerted)")
+        
+        return {
+            'new_dividend': len(new_dividend),
+            'new_volatility': len(new_volatility),
+            'new_52_week_low': len(new_52w_low),
+            'new_golden_cross': len(new_golden_cross),
+            'total_dividend': len(dividend_opportunities),
+            'total_volatility': len(volatility_opportunities),
+            'total_52_week_low': len(week_52_low_opportunities),
+            'total_golden_cross': len(golden_cross_opportunities)
+        }
+
